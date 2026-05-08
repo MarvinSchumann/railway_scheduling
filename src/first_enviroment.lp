@@ -1,3 +1,5 @@
+import encoding.lp
+
 global(200)
 
 train(0). start(0,(0,2),0,w).		end(0,(0,15),20). 	speed(0,1).

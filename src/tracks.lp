@@ -1,1 +1,1 @@
-% we still need to define, where trains can g on each track type
+% we still need to define, where trains can go on each track type
