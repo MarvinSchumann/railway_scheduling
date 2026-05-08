@@ -1,9 +1,8 @@
-import encoding.lp
 
-global(200)
+global(50).
 
-train(0). start(0,(0,2),0,w).		end(0,(0,15),20). 	speed(0,1).
-train(1). start(1,(0,15),0,e).		end(1,(0,2),20). 	speed(1,1).
+train(0). start(0,(0,2),0,e).    goal(0,(0,15),20).    speed(0,1).
+train(1). start(1,(0,15),0,w).   goal(1,(0,2),20).     speed(1,1).
 
 
 cell((0,0), 16386).
