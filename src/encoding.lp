@@ -24,6 +24,32 @@ active(T, Time) :-
     Time < Max,
     active(T, Time).
 
+% two active trains cannot be on the same cell at the same time
+:- train(T1), train(T2), T1 < T2,
+   on(T1, X, Y, Time, _),
+   on(T2, X, Y, Time, _),
+   active(T1, Time),
+   active(T2, Time).
+
+% two active trains cannot swap positions (pass through each other)
+:- train(T1), train(T2), T1 < T2,
+   on(T1, X1, Y1, Time, _),
+   on(T2, X2, Y2, Time, _),
+   on(T1, X2, Y2, Time+1, _),
+   on(T2, X1, Y1, Time+1, _),
+   active(T1, Time),
+   active(T2, Time),
+   X1 != X2.
+
+:- train(T1), train(T2), T1 < T2,
+   on(T1, X1, Y1, Time, _),
+   on(T2, X2, Y2, Time, _),
+   on(T1, X2, Y2, Time+1, _),
+   on(T2, X1, Y1, Time+1, _),
+   active(T1, Time),
+   active(T2, Time),
+   Y1 != Y2.
+
 % define what it means to reach a goal
 reached(T) :-
     on(T, X, Y, Time, _),
