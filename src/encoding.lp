@@ -3,15 +3,22 @@ on(T, X, Y, Time, Orient) :-
     train(T),
     start(T, (X,Y), Time, Orient).
 
+% helper: train was already at its goal the previous step
+was_at_goal(T, Time) :-
+    on(T, X, Y, Time, _),
+    end(T, (X,Y), _),
+    on(T, X, Y, Time-1, _).
+
+% first arrival: at goal but wasn't there the step before
+first_arrival(T, Time) :-
+    on(T, X, Y, Time, _),
+    end(T, (X,Y), _),
+    not was_at_goal(T, Time).
+
 % train is active until it first arrives
 active(T, Time) :-
     on(T, _, _, Time, _),
     not first_arrival(T, Time).
-
-active(T, Time) :-
-    first_arrival(T, ArrTime),
-    on(T, _, _, Time, _),
-    Time < ArrTime.
 
 % only move active trains
 { on(T, NX, NY, Time+1, NewOrient) :
@@ -55,12 +62,6 @@ reached(T) :-
     on(T, X, Y, Time, _),
     end(T, (X,Y), MaxTime),
     Time <= MaxTime.
-
-% first arrival: at goal but wasn't there the step before
-first_arrival(T, Time) :-
-    on(T, X, Y, Time, _),
-    end(T, (X,Y), _),
-    not on(T, X, Y, Time-1, _).
 
 % make sure every train reaches its goal
 :- train(T), not reached(T).

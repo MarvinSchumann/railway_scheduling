@@ -3,7 +3,7 @@ import clingo
 ctl = clingo.Control()
 ctl.load("encoding.lp")
 ctl.load("tracks.lp")
-ctl.load("first_enviroment.lp")
+ctl.load("first_environment.lp")
 
 ctl.ground([("base", [])])
 

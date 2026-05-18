@@ -9,7 +9,7 @@ from collections import defaultdict
 ctl = clingo.Control()
 ctl.load("encoding.lp")
 ctl.load("tracks.lp")
-ctl.load("first_enviroment.lp")
+ctl.load("first_environment.lp")
 ctl.ground([("base", [])])
 
 optimal_model = None
@@ -94,9 +94,8 @@ for (x, y) in cells:
     ax.add_patch(rect)
 
 # ── 5. Draw start and end markers ─────────────────────────────────────────────
-# Multiple trains can share a cell, so group them and draw one pip per train.
 
-start_cells = defaultdict(list)  # (x,y) -> [train_ids]
+start_cells = defaultdict(list)
 end_cells   = defaultdict(list)
 
 for t in range(num_trains):
@@ -106,13 +105,7 @@ for t in range(num_trains):
         end_cells[ends[t]].append(t)
 
 def draw_markers(cell_dict, symbol):
-    """
-    symbol = 'S' for start (top-left corner of cell),
-             'E' for end   (top-right corner of cell).
-    Each train gets a small colored square.
-    """
     for (x, y), trains in cell_dict.items():
-        n   = len(trains)
         cx  = y + (0.18 if symbol == "S" else 0.82)
         cy  = -x - 0.18
         for i, t in enumerate(trains):
@@ -146,17 +139,20 @@ train_labels  = []
 
 for t in range(num_trains):
     color = COLORS[t % len(COLORS)]
-    x0, y0 = train_steps[t][0]
+    first_time = min(train_steps[t])
+    x0, y0 = train_steps[t][first_time]
     circle = plt.Circle(
         (y0 + 0.5, -x0 - 0.5), 0.32,
-        color=color, zorder=5
+        color=color, zorder=5,
+        visible=False  # hidden until the train spawns
     )
     ax.add_patch(circle)
     label = ax.text(
         y0 + 0.5, -x0 - 0.5, str(t),
         ha="center", va="center",
         fontsize=8, fontweight="bold",
-        color="white", zorder=6
+        color="white", zorder=6,
+        visible=False
     )
     train_circles.append(circle)
     train_labels.append(label)
@@ -174,10 +170,17 @@ def update(frame):
     time_text.set_text(f"t = {frame}")
     for t in range(num_trains):
         times = train_steps[t]
-        actual_time = min(frame, max(times))
-        x, y = times[actual_time]
-        train_circles[t].center = (y + 0.5, -x - 0.5)
-        train_labels[t].set_position((y + 0.5, -x - 0.5))
+        first_time = min(times)
+        if frame < first_time:
+            train_circles[t].set_visible(False)
+            train_labels[t].set_visible(False)
+        else:
+            train_circles[t].set_visible(True)
+            train_labels[t].set_visible(True)
+            actual_time = min(frame, max(times))
+            x, y = times[actual_time]
+            train_circles[t].center = (y + 0.5, -x - 0.5)
+            train_labels[t].set_position((y + 0.5, -x - 0.5))
     return train_circles + train_labels + [time_text]
 
 ani = animation.FuncAnimation(
