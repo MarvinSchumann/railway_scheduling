@@ -62,13 +62,6 @@ first_arrival(T, Time) :-
     end(T, (X,Y), _),
     not on(T, X, Y, Time-1, _).
 
-% simulation done when all trains have arrived
-all_done(Time) :-
-    Time = #max { A : first_arrival(_, A) },
-    NTrains = #count { T : train(T) },
-    NArrived = #count { T : first_arrival(T, _) },
-    NTrains = NArrived.
-
 % make sure every train reaches its goal
 :- train(T), not reached(T).
 
