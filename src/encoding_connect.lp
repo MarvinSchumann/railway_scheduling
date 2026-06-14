@@ -24,46 +24,8 @@ active(T, Time) :-
     on(T, _, _, Time, _),
     not first_arrival(T, Time).
 
-
-% ==============================================================================
-% NEW LOGIC: COUPLING (Trains connecting with each other)
-% ==============================================================================
-
-% Two trains can only couple if they share the exact same destination.
-can_couple(T1, T2) :-
-    train(T1), train(T2), T1 != T2,
-    end(T1, (X,Y), _), end(T2, (X,Y), _).
-
-% Coupling condition: T2 catches up to T1.
-% This happens when T2 reaches the position at 'Time' that T1 occupied 
-% in the previous step (Time-1), provided they share the same goal.
-connected(T1, T2, Time) :-
-    can_couple(T1, T2),
-    on(T1, X1, Y1, Time-1, _),
-    on(T2, X1, Y1, Time, _),
-    global(Max), Time <= Max.
-
-% The connection persists in subsequent time steps as long as T1 is active.
-connected(T1, T2, Time+1) :-
-    connected(T1, T2, Time),
-    active(T1, Time),
-    global(Max), Time < Max.
-
-
-% ==============================================================================
-% MODIFIED & NEW MOVEMENT RULES
-% ==============================================================================
-
-% If T2 is coupled to T1, its movement is strictly dictated by T1.
-% T2 follows T1 like a wagon, moving into T1's current position in the next step.
-on(T2, X, Y, Time+1, Orient) :-
-    connected(T1, T2, Time+1),
-    on(T1, X, Y, Time, Orient),
-    active(T2, Time).
-
-% MODIFIED ORIGINAL RULE: 
-% Only move active trains. A train can ONLY choose its move freely via this choice rule 
-% if it is NOT coupled to another train in the next time step.
+% Only move active trains (standard movement — every train, leader or follower,
+% picks its own legal move or stays put).
 { on(T, NX, NY, Time+1, NewOrient) :
     connects(TrackType, Orient, DX, DY, NewOrient),
     NX = X + DX, NY = Y + DY, cell((NX,NY), _)
@@ -73,9 +35,33 @@ on(T2, X, Y, Time+1, Orient) :-
     cell((X,Y), TrackType),
     global(Max),
     Time < Max,
-    active(T, Time),
-    % MODIFICATION: Prevents Clingo from generating independent moves for a coupled trailing train
-    not connected(_, T, Time+1).
+    active(T, Time).
+
+
+% ==============================================================================
+% NEW LOGIC: COUPLING (trains queue up and follow, no merging)
+% ==============================================================================
+
+% Two trains can couple only if they share the exact same destination.
+can_couple(T1, T2) :-
+    train(T1), train(T2), T1 != T2,
+    end(T1, (X,Y), _), end(T2, (X,Y), _).
+
+% T2 is directly behind T1 at Time: T2 now sits on the cell T1 occupied the
+% previous step (it has stepped into the leader's just-vacated cell).
+%
+% NOTE: positions here come purely from the standard movement rule above, so
+% this is an *observation* — there is no circular support between `connected`
+% and `on` (the bug in the previous version, which made the program UNSAT).
+connected(T1, T2, Time) :-
+    can_couple(T1, T2),
+    on(T1, X, Y, Time-1, _),
+    on(T2, X, Y, Time, _),
+    active(T2, Time).
+
+% An (unordered) couple has formed at some point — in either leader/follower order.
+coupled(T1, T2) :- connected(T1, T2, _).
+coupled(T1, T2) :- connected(T2, T1, _).
 
 
 % ==============================================================================
@@ -83,6 +69,7 @@ on(T2, X, Y, Time+1, Orient) :-
 % ==============================================================================
 
 % Two active trains cannot be on the same cell at the same time
+% (this is what keeps the follower one cell *behind*, never overlapping).
 :- train(T1), train(T2), T1 < T2,
    on(T1, X, Y, Time, _),
    on(T2, X, Y, Time, _),
@@ -121,9 +108,17 @@ reached(T) :-
 
 
 % ==============================================================================
-% NEW LOGIC: COUPLING CONSTRAINT
+% NEW LOGIC: COUPLING CONSTRAINTS
 % ==============================================================================
 
-% Hard constraint: If two trains are capable of coupling, they MUST connect 
-% at some point before reaching the goal. This forces the front train to wait.
-:- can_couple(T1, T2), T1 < T2, not connected(T1, T2, _).
+% Trains that can couple MUST couple at some point. This forces the leading
+% train to wait until the trailing one has caught up to right behind it.
+:- can_couple(T1, T2), T1 < T2, not coupled(T1, T2).
+
+% Once coupled, stay coupled: while the leader is still active and moving, the
+% follower must remain directly behind it (a convoy, not a merge). The follower
+% keeps stepping into the leader's vacated cell each tick.
+:- connected(T1, T2, Time),
+   active(T1, Time),
+   global(Max), Time < Max,
+   not connected(T1, T2, Time+1).
