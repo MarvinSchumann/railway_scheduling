@@ -1,0 +1,153 @@
+That's the real bug — and it's in the framework's pathfinding.lp. The "no swap" constraint is:
+
+
+:- at(A,(X,Y),_,T), at(B,(X,Y),_,T+1), A!=B.
+That's not a swap constraint — it forbids train B from ever entering a cell that train A occupied the previous tick. In other words it prohibits one train from following directly behind another at all. That's exactly the convoy relationship, so coupling is impossible.
+
+A real swap/pass-through needs two cells being exchanged. Let me fix it properly:
+
+Read pathfinding.lp (lines 30-45)
+Edit pathfinding.lp
+Added 8 lines
+Bash Re-validate after swap-constraint fix
+IN
+cd /Users/marvin/repos/flatlands/src/action
+echo "=== straight-line convoy, must-couple ==="; clingo transitions.lp pathfinding.lp actions.lp /tmp/c_must.lp /tmp/straight.lp -t1 --quiet=2 2>&1 | grep -oE "SATISFIABLE|UNSATISFIABLE" | head -1
+echo "=== junction demo, FULL coupling ==="; clingo transitions.lp pathfinding.lp actions.lp coupling.lp connect_demo.lp -t1 --quiet=2 2>&1 | grep -oE "SATISFIABLE|UNSATISFIABLE" | head -1
+echo "=== junction demo action timeline (non-wait) ==="
+clingo transitions.lp pathfinding.lp actions.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 \
+ | tr ' ' '\n' | grep -E "^action\(" \
+ | sed -E 's/action\(train\(([0-9])\),([a-z_]+),([0-9]+)\)/\3 \1 \2/' \
+ | sort -n | awk '$3!="wait"{printf "t=%-2s train %s  %s\n",$1,$2,$3}'
+echo "=== connected ==="; clingo transitions.lp pathfinding.lp actions.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | tr ' ' '\n' | grep -E "^connected\(" | sort -t, -k3 -n
+
+OUT
+Command running in background with ID: bni727u25. Output is being written to: /private/tmp/claude-501/-Users-marvin-repos-flatlands/25f3827b-3456-4f0b-a4f5-0dcb1e100670/tasks/bni727u25.output. You will be notified when it completes. To check interim output, use Read on that file path.
+Bash Read background validation output
+IN
+sleep 3; cat /private/tmp/claude-501/-Users-marvin-repos-flatlands/25f3827b-3456-4f0b-a4f5-0dcb1e100670/tasks/bni727u25.output 2>/dev/null
+
+OUT
+=== straight-line convoy, must-couple ===
+SATISFIABLE
+=== junction demo, FULL coupling ===
+SATISFIABLE
+=== junction demo action timeline (non-wait) ===
+t=1  train 0  move_forward
+t=1  train 1  move_forward
+t=4  train 1  move_forward
+t=5  train 0  move_forward
+t=5  train 1  move_left
+t=6  train 0  move_forward
+t=6  train 1  move_forward
+t=8  train 0  move_forward
+=== connected ===
+SAT now. The connected/at atoms are hidden by #show action/3 in actions.lp — let me dump positions without it to confirm the convoy:
+
+Bash Dump junction demo positions and connected
+IN
+cd /Users/marvin/repos/flatlands/src/action
+clingo transitions.lp pathfinding.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | tr ' ' '\n' \
+ | grep -E "^at\(|^connected\(" \
+ | sed -E 's/at\(([0-9]),\(([0-9]+),([0-9]+)\),[a-z]+,([0-9]+)\)/POS \4 \1 (\2,\3)/' \
+ | awk '/^POS/{m[$2]=m[$2] sprintf("  T%s%s",$3,$4)} /^connected/{c=c"  "$0} END{for(t=0;t<=12;t++) if(t in m) printf "t=%-2s%s\n",t,m[t]; print "---"; print c}'
+
+OUT
+t=2   T0(1,1)  T1(0,2)
+t=3   T0(1,2)  T1(0,2)
+t=4   T0(1,3)  T1(1,2)
+t=5   T0(1,4)  T1(1,3)
+t=6   T1(1,3)
+t=7   T1(1,3)
+t=8   T1(1,3)
+t=9   T1(1,3)
+t=10  T1(1,3)
+t=11  T1(1,3)
+t=12  T1(1,3)
+---
+  connected(0,1,4)  connected(0,1,5)
+Train 1 appears stuck at (1,3) — but that contradicts SAT (it must reach its goal). Let me look at the raw at(1,…) atoms to be sure I'm not misreading:
+
+Bash Raw at and done for train 1
+IN
+cd /Users/marvin/repos/flatlands/src/action
+echo "=== raw at(1,...) ==="; clingo transitions.lp pathfinding.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | tr ' ' '\n' | grep -E "^at\(1," | sort -t, -k4 -n
+echo "=== done(1,..) ==="; clingo transitions.lp pathfinding.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | tr ' ' '\n' | grep -E "^done\(1," | sort
+
+OUT
+=== raw at(1,...) ===
+at(1,(0,2),s,2)
+at(1,(0,2),s,3)
+at(1,(1,2),s,4)
+at(1,(1,3),e,10)
+at(1,(1,3),e,11)
+at(1,(1,3),e,12)
+at(1,(1,3),e,13)
+at(1,(1,3),e,14)
+at(1,(1,3),e,15)
+at(1,(1,3),e,16)
+at(1,(1,3),e,17)
+at(1,(1,3),e,18)
+at(1,(1,3),e,19)
+at(1,(1,3),e,20)
+at(1,(1,3),e,21)
+at(1,(1,3),e,22)
+at(1,(1,3),e,23)
+at(1,(1,3),e,24)
+at(1,(1,3),e,25)
+at(1,(1,3),e,26)
+at(1,(1,3),e,27)
+at(1,(1,3),e,28)
+at(1,(1,3),e,29)
+at(1,(1,3),e,30)
+at(1,(1,3),e,5)
+at(1,(1,3),e,6)
+at(1,(1,3),e,7)
+at(1,(1,3),e,8)
+at(1,(1,3),e,9)
+at(1,(1,4),e,31)
+=== done(1,..) ===
+done(1,31)
+Now I see it — train 1 does reach the goal (at t31), but it dawdles at (1,3) for 26 ticks first. The framework's action encoding has no optimization, so the solver picks any feasible plan rather than a tight one. The coupling itself is correct (connected(0,1,4/5) — train 0 leads, train 1 waits at the junction then follows). Let me add an arrival-time minimize so the convoy is tight:
+
+Edit coupling.lp
+Added 5 lines
+Bash Validate tight convoy with minimize
+IN
+cd /Users/marvin/repos/flatlands/src/action
+clingo transitions.lp pathfinding.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | grep -E "OPTIMUM|UNSAT" | head -1
+echo "=== positions (optimal) ==="
+clingo transitions.lp pathfinding.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | tr ' ' '\n' \
+ | grep -E "^at\(" | sed -E 's/at\(([0-9]),\(([0-9]+),([0-9]+)\),[a-z]+,([0-9]+)\)/\4 \1 (\2,\3)/' \
+ | sort -n | awk '{m[$1]=m[$1] sprintf("  T%s%s",$2,$3)} END{for(t=0;t<=10;t++) if(t in m) printf "t=%-2s%s\n",t,m[t]}'
+echo "=== connected ==="; clingo transitions.lp pathfinding.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 | tr ' ' '\n' | grep -E "^connected\(" | sort -t, -k3 -n
+
+OUT
+Command running in background with ID: bgdgnlwiv. Output is being written to: /private/tmp/claude-501/-Users-marvin-repos-flatlands/25f3827b-3456-4f0b-a4f5-0dcb1e100670/tasks/bgdgnlwiv.output. You will be notified when it completes. To check interim output, use Read on that file path.
+Bash Read tight convoy validation
+IN
+sleep 4; cat /private/tmp/claude-501/-Users-marvin-repos-flatlands/25f3827b-3456-4f0b-a4f5-0dcb1e100670/tasks/bgdgnlwiv.output 2>/dev/null
+
+OUT
+OPTIMUM FOUND
+=== positions (optimal) ===
+t=2   T0(1,1)  T1(0,2)
+t=3   T0(1,2)  T1(0,2)
+t=4   T0(1,3)  T1(1,2)
+t=5   T0(1,4)  T1(1,3)
+t=6   T1(1,4)
+=== connected ===
+OPTIMUM FOUND — tight convoy now:
+
+t3: train 0 takes the junction; train 1 waits at (0,2)
+t4–5: train 1 follows one cell behind (into 0's vacated cells)
+t5: train 0 reaches goal and leaves the map; t6: train 1 reaches the same goal
+Let me confirm the action/3 output is clean and that my pathfinding.lp edits don't break the framework's own random envs:
+
+Bash Check action output and regression on real env
+IN
+cd /Users/marvin/repos/flatlands/src/action
+echo "=== action/3 output (what the harness consumes) ==="
+clingo transitions.lp pathfinding.lp actions.lp coupling.lp connect_demo.lp -t1 --quiet=1 2>&1 \
+ | tr ' ' '\n' | grep -E "^action\(" | sed -E 's/action\(train\(([0-9])\),([a-z_]+),([0-9]+)\)/\3 \1 \2/' \
+ | sort -n -k1 -k2 | awk '{printf "t=%-2s train%s %s

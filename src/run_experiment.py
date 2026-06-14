@@ -1,7 +1,7 @@
 import clingo
 
 ctl = clingo.Control()
-ctl.load("encoding.lp")
+ctl.load("encoding_connect.lp")
 ctl.load("tracks.lp")
 ctl.load("first_environment.lp")
 

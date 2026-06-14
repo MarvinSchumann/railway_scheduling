@@ -7,9 +7,9 @@ from collections import defaultdict
 # ── 1. Solve ──────────────────────────────────────────────────────────────────
 
 ctl = clingo.Control()
-ctl.load("encoding.lp")
+ctl.load("encoding_connect.lp")
 ctl.load("tracks.lp")
-ctl.load("environment2.lp")
+ctl.load("connect_environment.lp")
 ctl.ground([("base", [])])
 
 optimal_model = None
