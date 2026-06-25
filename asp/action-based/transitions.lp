@@ -196,6 +196,14 @@ offset((e,l), (-1, 0), n).
 offset((w,r), (-1, 0), n).
 
 % -- heading east  -- %
-offset((e,f), ( 0, 1), e). 	
-offset((s,l), ( 0, 1), e).	
+offset((e,f), ( 0, 1), e).
+offset((s,l), ( 0, 1), e).
 offset((n,r), ( 0, 1), e).
+
+% -- waiting in place ----------------------------------------------------------
+% A waiting train stays on its cell and keeps its heading. Without this offset,
+% choosing `wait` while active produces no `at/4` for the next step, so the
+% train silently disappears — so a train could never hold to let another pass.
+% With it, a train can wait mid-route, which is what lets one train wait for and
+% then follow another (see coupling.lp).
+offset((D,wait), (0,0), D) :- dir(D).
