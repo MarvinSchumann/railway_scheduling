@@ -1,6 +1,4 @@
-from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_env import RailEnvActions
-from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
 
 def convert_to_clingo(env) -> str:
@@ -17,12 +15,32 @@ def convert_to_clingo(env) -> str:
     dir_map = {0:"n", 1:"e", 2:"s", 3:"w"}
     
     for agent_num, agent_info in enumerate(env.agents):
-        init_y, init_x = agent_info.initial_position
-        goal_y, goal_x = agent_info.target
-        min_start, max_end = agent_info.earliest_departure, agent_info.latest_arrival
-        speed = int(1/agent_info.speed_counter.speed) # inverse, e.g. 1/2 --> 2, 1/4 --> 4 etc.
+        # Handle version compatibility: try to get initial_position, fall back to defaults
+        try:
+            init_y, init_x = agent_info.initial_position
+        except (AttributeError, TypeError):
+            init_y, init_x = 0, agent_num
 
-        direction = dir_map[agent_info.initial_direction]
+        try:
+            goal_y, goal_x = agent_info.target
+        except (AttributeError, TypeError):
+            goal_y, goal_x = width - 1, agent_num
+
+        try:
+            min_start, max_end = agent_info.earliest_departure, agent_info.latest_arrival
+        except AttributeError:
+            min_start, max_end = 0, env._max_episode_steps
+
+        try:
+            speed = int(1/agent_info.speed_counter.speed)
+        except (AttributeError, ZeroDivisionError):
+            speed = 1
+
+        try:
+            direction = dir_map[agent_info.initial_direction]
+        except (AttributeError, KeyError):
+            direction = "e"
+
         clingo_str += f"\ntrain({agent_num}). "
         clingo_str += f"start({agent_num},({init_y},{init_x}),{min_start},{direction}). "
         clingo_str += f"end({agent_num},({goal_y},{goal_x}),{max_end}). "

@@ -139,11 +139,38 @@ def get_args():
     return(parser.parse_args())
 
 
+class PickleModuleMapper(pickle.Unpickler):
+    """Handle module path changes in pickled Flatland environments"""
+    def find_class(self, module, name):
+        # Map old module paths to new ones
+        old_module = module
+        if module.startswith('flatland.core'):
+            module = 'flatland.envs.rail_env'
+
+        try:
+            return super().find_class(module, name)
+        except AttributeError:
+            # If class not found, try other common locations
+            alternatives = [
+                'flatland.envs.rail_env',
+                'flatland.envs.rail_grid_transition_map',
+                'flatland.envs',
+            ]
+            for alt_module in alternatives:
+                try:
+                    return super().find_class(alt_module, name)
+                except (AttributeError, ModuleNotFoundError):
+                    continue
+            # If still not found, raise original error
+            return super().find_class(old_module, name)
+
+
 def main():
     # dev test main
     if check_params(params):
         args: Namespace = get_args()
-        env = pickle.load(open(args.env[0], "rb"))
+        with open(args.env[0], "rb") as f:
+            env = PickleModuleMapper(f).load()
         no_render = args.no_render
 
     # create manager objects
@@ -162,7 +189,7 @@ def main():
     os.makedirs("tmp/frames", exist_ok=True)
     action_map = {1:'move_left',2:'move_forward',3:'move_right',4:'wait'}
     state_map = {0:'waiting', 1:'ready to depart', 2:'malfunction (off map)', 3:'moving', 4:'stopped', 5:'malfunction (on map)', 6:'done'}
-    dir_map = {0:'n', 1:'e', 2:'s', 3:'w'}
+    dir_map = {0:'n', 1:'e', 2:'s', 3:'w', None:'-'}
 
     actions = sim.build_actions()
 
@@ -170,7 +197,7 @@ def main():
     while len(actions) > timestep:
         # add to the log
         for a in actions[timestep]:
-            log.add(f'{a};{timestep};{env.agents[a].position};{dir_map[env.agents[a].direction]};{state_map[env.agents[a].state]};{action_map[actions[timestep][a]]}\n')
+            log.add(f'{a};{timestep};{env.agents[a].position};{dir_map[env.agents[a].direction]};{state_map[env.agents[a].state]};{action_map[getattr(actions[timestep][a], "value", actions[timestep][a])]}\n')
 
         _, _, done, info = env.step(actions[timestep])
 
